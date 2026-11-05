@@ -1,0 +1,11 @@
+[package]
+name = "typestate_macro"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = [".", "macros", "macros_impls"]
+
+[dependencies]
+macros = {path = "./macros"}
+macros_impls = {path = "./macros_impls"}
