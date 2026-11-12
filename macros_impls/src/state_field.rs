@@ -23,6 +23,7 @@ impl ToTokens for StateName {
 }
 
 // StateField in a state struct
+// Currently not supporting attribute-like macros
 #[derive(Clone)]
 pub struct StateField {
     pub visibility: Option<Visibility>,
@@ -32,11 +33,14 @@ pub struct StateField {
 
 impl Parse for StateField {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // parse the optional visibility keyword
+        // Parse the optional visibility keyword
         let visibility = input.parse::<Visibility>().ok();
         let name = input.parse::<Ident>()?;
 
-        // parse the : in {name: type}
+        // Parse the : in 
+        // MyStruct {
+        //   my_field: type,
+        // }
         input.parse::<Token![:]>()?;
         let ty = input.parse::<Type>()?;
 

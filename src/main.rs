@@ -36,6 +36,7 @@ typestate! {
         #[abbr = "RCT"]
         rocket = { 
             [
+                #[derive(Hash)]
                 Ground { pub voltage: u8 }, 
                 Fueling, 
                 Armed, 

@@ -1,10 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{Attribute, Visibility, braced, parenthesized};
-use syn::{Ident, Token, Type, parse::{Parse, ParseStream}, punctuated::Punctuated, token};
+use syn::{Ident, Token, parse::{Parse, ParseStream}, punctuated::Punctuated, token};
 
 use crate::state_field::StateField;
-// Represents a state, possibly with fields
+// Represents a state (which is just a struct) possibly with user provided states
 #[derive(Clone)]
 pub struct State {
     pub name: Ident,
@@ -13,10 +13,10 @@ pub struct State {
     // braces stored for later implementing `ToTokens`
     pub braces: Option<token::Brace>,
     pub fields: Option<Punctuated<StateField, Token![,]>>,
-    // tuple structs
+    // In case of a tuple struct
     pub parens: Option<token::Paren>,
     pub tuple_fields: Option<Punctuated<syn::Field, Token![,]>>,
-    // shared
+    // Is it shared between spaces (meaning that it can be manipulated via more than one space)
     pub shared: bool
 }
 
@@ -30,9 +30,9 @@ impl Parse for State {
         attrs.retain(|attr| {
             if attr.path().is_ident("shared") {
                 shared = true;
-                false // remove it
+                false
             } else {
-                true // keep other attributes like #[derive(...)]
+                true // Keep other attributes like #[derive(...)]
             }
         });
 
@@ -41,7 +41,7 @@ impl Parse for State {
         let mut parens = None;
         let mut tuple_fields = None;
 
-        // if there are braces -> there are fields to parse
+        // If there are braces in the stream => we parse the fields
         if input.peek(token::Brace) {
             let content;
             braces = Some(braced!(content in input));
@@ -69,45 +69,51 @@ impl ToTokens for State {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = &self.name;
         
-        let vis = match &self.visibility {
-            syn::Visibility::Inherited => quote! { pub },
-            v => quote! { #v },
+        let visibility = match &self.visibility {
+            Visibility::Public(_) => quote! { pub },
+            Visibility::Restricted(vis_restricted) => quote! { #vis_restricted },
+            Visibility::Inherited => quote! {},
         };
+
+        // syn::Visibility::Inherited => quote! { pub },
+        // v => quote! { #v },
         
         let attrs = &self.attrs;
 
         if let Some(_braces) = &self.braces {
             let fields = self.fields.iter().flatten().map(|f| {
-                let mut field = f.clone();
-                if matches!(field.visibility, None | Some(syn::Visibility::Inherited)) {
-                    field.visibility = Some(syn::parse_quote! { pub });
-                }
+                let field = f.clone();
+                // if matches!(field.visibility, None | Some(syn::Visibility::Inherited)) {
+                //     field.visibility = Some(syn::parse_quote! { pub });
+                // }
                 field
             });
 
             tokens.extend(quote! {
                 #(#attrs)*
-                #vis struct #name {
+                #visibility struct #name {
                     #(#fields),*
                 }
             });
+            // Tuple struct
         } else if let Some(_parens) = &self.parens {
             let tuple_fields = self.tuple_fields.iter().flatten().map(|f| {
-                let mut field = f.clone();
-                if matches!(field.vis, syn::Visibility::Inherited) {
-                    field.vis = syn::parse_quote! { pub };
-                }
+                let field = f.clone();
+                // if matches!(field.visibility, syn::Visibility::Inherited) {
+                //     field.visibility = syn::parse_quote! { pub };
+                // }
                 field
             });
 
             tokens.extend(quote! {
                 #(#attrs)*
-                #vis struct #name(#(#tuple_fields),*);
+                #visibility struct #name(#(#tuple_fields),*);
             });
+            // Unit struct
         } else {
             tokens.extend(quote! {
                 #(#attrs)*
-                #vis struct #name;
+                #visibility struct #name;
             });
         }
     }
