@@ -1,7 +1,12 @@
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{Attribute, Visibility, braced, parenthesized};
-use syn::{Ident, Token, parse::{Parse, ParseStream}, punctuated::Punctuated, token};
+use syn::{
+    Ident, Token,
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    token,
+};
 
 use crate::state_field::StateField;
 // Represents a state (which is just a struct) possibly with user provided states
@@ -17,7 +22,7 @@ pub struct State {
     pub parens: Option<token::Paren>,
     pub tuple_fields: Option<Punctuated<syn::Field, Token![,]>>,
     // Is it shared between spaces (meaning that it can be manipulated via more than one space)
-    pub shared: bool
+    pub shared: bool,
 }
 
 impl Parse for State {
@@ -60,7 +65,7 @@ impl Parse for State {
             tuple_fields,
             visibility,
             attrs,
-            shared
+            shared,
         })
     }
 }
@@ -68,7 +73,7 @@ impl Parse for State {
 impl ToTokens for State {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = &self.name;
-        
+
         let visibility = match &self.visibility {
             Visibility::Public(_) => quote! { pub },
             Visibility::Restricted(vis_restricted) => quote! { #vis_restricted },
@@ -77,7 +82,7 @@ impl ToTokens for State {
 
         // syn::Visibility::Inherited => quote! { pub },
         // v => quote! { #v },
-        
+
         let attrs = &self.attrs;
 
         if let Some(_braces) = &self.braces {

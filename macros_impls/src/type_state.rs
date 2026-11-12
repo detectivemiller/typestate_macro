@@ -2,20 +2,28 @@ use std::{collections::HashSet, vec};
 
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
-use syn::{FieldsNamed, GenericParam, Ident, ItemImpl, ItemStruct, Token, WherePredicate, parse::{Parse, ParseStream}, punctuated::Punctuated, token::Comma};
+use syn::{
+    FieldsNamed, GenericParam, Ident, ItemImpl, ItemStruct, Token, WherePredicate,
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    token::Comma,
+};
 
-use crate::{space::{Space, SpaceAbrreviation, SpaceName}, transition::TransitionArgs};
+use crate::{
+    space::{Space, SpaceAbrreviation, SpaceName},
+    transition::TransitionArgs,
+};
 
 // Possible state spaces along with defaults and the former struct
 pub struct TypeState {
     spaces: Punctuated<Space, Token![;]>,
     input_struct: ItemStruct,
-    impl_blocks: Vec<ValidatedImpl>
+    impl_blocks: Vec<ValidatedImpl>,
 }
 
 pub struct ValidatedImpl {
     pub original_impl: ItemImpl,
-    pub transitions: Vec<(usize, TransitionArgs)>
+    pub transitions: Vec<(usize, TransitionArgs)>,
 }
 
 impl Parse for TypeState {
@@ -24,7 +32,9 @@ impl Parse for TypeState {
 
         // Stop parsing spaces when we hit `struct` or `pub struct`
         while !input.is_empty() {
-            if input.peek(Token![struct]) || (input.peek(Token![pub]) && input.peek2(Token![struct])) {
+            if input.peek(Token![struct])
+                || (input.peek(Token![pub]) && input.peek2(Token![struct]))
+            {
                 break;
             }
 
@@ -69,7 +79,7 @@ impl Parse for TypeState {
         for space in &spaces {
             let abbr_span = space.abbreviation.span();
             let abbr = &space.abbreviation;
-            
+
             let name_span = space.name.span();
             let name = &space.name;
 
@@ -94,12 +104,12 @@ impl ToTokens for TypeState {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let spaces = &self.spaces;
         let mut new_struct = self.input_struct.clone();
-        
+
         new_struct.vis = syn::parse_quote! { pub };
 
         // For the new struct
         let mut where_clause_pred: Punctuated<WherePredicate, Comma> = Punctuated::new();
-        let mut generics: Punctuated<GenericParam, Comma>  = Punctuated::new();
+        let mut generics: Punctuated<GenericParam, Comma> = Punctuated::new();
         let mut fields: Punctuated<syn::Field, Comma> = Punctuated::new();
 
         for space in spaces {
@@ -110,11 +120,8 @@ impl ToTokens for TypeState {
                 "State",
             );
 
-            let marker_trait_fn = ident_join(
-                space_name,
-                &space_name.to_string().to_lowercase(),
-                "_state",
-            );
+            let marker_trait_fn =
+                ident_join(space_name, &space_name.to_string().to_lowercase(), "_state");
 
             let space_abbr = &space.abbreviation;
             let rc_state_field = marker_trait_fn.clone();
@@ -124,16 +131,16 @@ impl ToTokens for TypeState {
             // Define the marker trait inside the space module
             space_tokens.extend(quote! {
                 pub trait #marker_trait_name {
-                    fn #marker_trait_fn(&self) -> &'static str; 
+                    fn #marker_trait_fn(&self) -> &'static str;
                 }
             });
 
             for state in &space.states {
                 let mut modified_state = state.clone();
-                
+
                 // pub on the struct field
                 modified_state.visibility = syn::Visibility::Public(syn::token::Pub::default());
-                
+
                 // named fields
                 if let Some(ref mut fields) = modified_state.fields {
                     for f in fields {
@@ -203,17 +210,17 @@ impl ToTokens for TypeState {
         match new_struct.fields {
             syn::Fields::Named(ref mut existing_fields) => {
                 existing_fields.named.extend(fields);
-            },
+            }
             syn::Fields::Unnamed(ref mut existing_fields) => {
                 existing_fields.unnamed.extend(fields);
-            },
+            }
             syn::Fields::Unit => {
                 new_struct.semi_token = None;
                 new_struct.fields = syn::Fields::Named(FieldsNamed {
                     brace_token: Default::default(),
                     named: fields,
                 });
-            },
+            }
         }
 
         let struct_name = &self.input_struct.ident;
@@ -227,14 +234,16 @@ impl ToTokens for TypeState {
                 let mut modified_impl_item = val_impl.original_impl.items[*method_idx].clone();
 
                 if let syn::ImplItem::Fn(method) = &mut modified_impl_item {
-                    method.attrs.retain(|attr| !attr.path().is_ident("transition"));
+                    method
+                        .attrs
+                        .retain(|attr| !attr.path().is_ident("transition"));
 
                     let return_type = build_struct_type_with_state(
-                        struct_name, 
-                        &self.spaces, 
-                        &args.space_name, 
+                        struct_name,
+                        &self.spaces,
+                        &args.space_name,
                         &args.to,
-                        true
+                        true,
                     );
 
                     method.sig.output = syn::parse_quote! { -> #return_type };
@@ -243,19 +252,25 @@ impl ToTokens for TypeState {
                 let target_space_name = &args.space_name;
                 let from_state = &args.from;
 
-                let transitioning_space = self.spaces.iter()
+                let transitioning_space = self
+                    .spaces
+                    .iter()
                     .find(|s| s.name == SpaceName(target_space_name.clone().0))
                     .unwrap();
                 let transitioning_abbr = &transitioning_space.abbreviation;
 
-                let impl_generics: Vec<_> = self.spaces.iter().filter_map(|s| {
-                    if s.name == SpaceName(target_space_name.clone().0) {
-                        None
-                    } else {
-                        let abbr = &s.abbreviation;
-                        Some(quote! { #abbr })
-                    }
-                }).collect();
+                let impl_generics: Vec<_> = self
+                    .spaces
+                    .iter()
+                    .filter_map(|s| {
+                        if s.name == SpaceName(target_space_name.clone().0) {
+                            None
+                        } else {
+                            let abbr = &s.abbreviation;
+                            Some(quote! { #abbr })
+                        }
+                    })
+                    .collect();
 
                 let self_type = build_struct_type_with_state(
                     struct_name,
@@ -265,12 +280,18 @@ impl ToTokens for TypeState {
                     true,
                 );
 
-                let filtered_predicates: Vec<_> = new_struct.generics.where_clause.as_ref()
+                let filtered_predicates: Vec<_> = new_struct
+                    .generics
+                    .where_clause
+                    .as_ref()
                     .map(|wc| {
-                        wc.predicates.iter().filter(|pred| {
-                            let pred_str = quote!(#pred).to_string();
-                            !pred_str.contains(&transitioning_abbr.to_string())
-                        }).collect()
+                        wc.predicates
+                            .iter()
+                            .filter(|pred| {
+                                let pred_str = quote!(#pred).to_string();
+                                !pred_str.contains(&transitioning_abbr.to_string())
+                            })
+                            .collect()
                     })
                     .unwrap_or_default();
 
@@ -282,6 +303,8 @@ impl ToTokens for TypeState {
 
                 generated_impls.extend(quote! {
                     impl<#(#impl_generics),*> #self_type #filtered_where {
+                        // For methods in test, for reason they are flagged as not used even though they provide the correct output
+                        #[allow(dead_code)]
                         #modified_impl_item
                     }
                 });
@@ -289,51 +312,58 @@ impl ToTokens for TypeState {
         }
 
         let mut transition_helpers = TokenStream::new();
-        
+
         let mut trait_impls = TokenStream::new();
-    
+
         let new_args = match &self.input_struct.fields {
-            syn::Fields::Named(fields) => {
-                fields.named.iter().map(|f|{
+            syn::Fields::Named(fields) => fields
+                .named
+                .iter()
+                .map(|f| {
                     let ident = f.ident.as_ref().unwrap();
                     let ty = f.ty.clone();
 
                     quote! {#ident: #ty}
-                }).collect::<Vec<_>>()
-            }
+                })
+                .collect::<Vec<_>>(),
             _ => vec![],
         };
 
         let inits = match &self.input_struct.fields {
-            syn::Fields::Named(fields) => {
-                fields.named.iter().map(|f|{
+            syn::Fields::Named(fields) => fields
+                .named
+                .iter()
+                .map(|f| {
                     let ident = f.ident.as_ref().unwrap();
 
                     quote! {#ident}
-                }).collect::<Vec<_>>()
-            }
+                })
+                .collect::<Vec<_>>(),
             _ => vec![],
         };
 
         for space in &self.spaces {
             let space_name = &space.name;
-            let transition_fn_name = Ident::new(&format!("transition_{}", space_name), space_name.span());
-            
+            let transition_fn_name =
+                Ident::new(&format!("transition_{}", space_name), space_name.span());
+
             let return_type = build_struct_type_with_state(
                 struct_name,
                 &self.spaces,
                 space_name,
                 &syn::parse_quote!(N),
-                false, 
+                false,
             );
 
             let original_field_inits = match &self.input_struct.fields {
-                syn::Fields::Named(fields) => {
-                    fields.named.iter().map(|f| {
+                syn::Fields::Named(fields) => fields
+                    .named
+                    .iter()
+                    .map(|f| {
                         let ident = f.ident.as_ref().unwrap();
                         quote! { #ident: self.#ident }
-                    }).collect::<Vec<_>>()
-                }
+                    })
+                    .collect::<Vec<_>>(),
                 _ => vec![],
             };
 
@@ -380,7 +410,11 @@ impl ToTokens for TypeState {
 
         // Default state initializers for `new()` constructor
         let default_inits = self.spaces.iter().map(|space| {
-            let fn_field = ident_join(&space.name, &space.name.to_string().to_lowercase(), "_state");
+            let fn_field = ident_join(
+                &space.name,
+                &space.name.to_string().to_lowercase(),
+                "_state",
+            );
             let space_name = &space.name;
             if let Some(ref def) = space.default {
                 quote! { #fn_field: std::rc::Rc::new(#space_name::#def) }
@@ -407,7 +441,7 @@ impl ToTokens for TypeState {
             }
 
             #trait_impls
-            
+
             #generated_impls
         });
     }
@@ -420,18 +454,21 @@ pub fn build_struct_type_with_state(
     substitute_state: &Ident,
     qualify: bool,
 ) -> TokenStream {
-    let type_args: Vec<_> = spaces.iter().map(|space| {
-        if space.name == SpaceName(target_space_name.clone()) {
-            if qualify {
-                quote! { #target_space_name::#substitute_state }
+    let type_args: Vec<_> = spaces
+        .iter()
+        .map(|space| {
+            if space.name == SpaceName(target_space_name.clone()) {
+                if qualify {
+                    quote! { #target_space_name::#substitute_state }
+                } else {
+                    quote! { #substitute_state }
+                }
             } else {
-                quote! { #substitute_state }
+                let abbr = &space.abbreviation;
+                quote! { #abbr }
             }
-        } else {
-            let abbr = &space.abbreviation;
-            quote! { #abbr }
-        }
-    }).collect();
+        })
+        .collect();
 
     quote! {
         #struct_name<#(#type_args),*>

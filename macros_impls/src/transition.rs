@@ -1,11 +1,12 @@
-use syn::{Attribute, Token, bracketed, parse::Parse, spanned::Spanned};
+use syn::Attribute;
 
 use crate::{space::SpaceName, state_field::StateName};
 
+// Arguments for the #[transition()] attribute
 pub struct TransitionArgs {
     pub space_name: SpaceName,
     pub from: StateName,
-    pub to: StateName
+    pub to: StateName,
 }
 
 impl TransitionArgs {
@@ -29,15 +30,10 @@ impl TransitionArgs {
             }
         })?;
 
-        let space_name = space_name.ok_or_else(|| {
-            syn::Error::new_spanned(attr, "missing `space` argument")
-        })?;
-        let from = from.ok_or_else(|| {
-            syn::Error::new_spanned(attr, "missing `from` argument")
-        })?;
-        let to = to.ok_or_else(|| {
-            syn::Error::new_spanned(attr, "missing `to` argument")
-        })?;
+        let space_name =
+            space_name.ok_or_else(|| syn::Error::new_spanned(attr, "missing `space` argument"))?;
+        let from = from.ok_or_else(|| syn::Error::new_spanned(attr, "missing `from` argument"))?;
+        let to = to.ok_or_else(|| syn::Error::new_spanned(attr, "missing `to` argument"))?;
 
         Ok(TransitionArgs {
             space_name,

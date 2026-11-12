@@ -1,7 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
-use syn::{Ident, Token, Type, Visibility, parse::{Parse, ParseStream}};
 use std::ops::{Deref, DerefMut};
+use syn::{
+    Ident, Token, Type, Visibility,
+    parse::{Parse, ParseStream},
+};
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct StateName(Ident);
@@ -12,7 +15,7 @@ impl Parse for StateName {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ident = input.parse::<Ident>()?;
 
-        Ok(StateName(ident))       
+        Ok(StateName(ident))
     }
 }
 
@@ -37,7 +40,7 @@ impl Parse for StateField {
         let visibility = input.parse::<Visibility>().ok();
         let name = input.parse::<Ident>()?;
 
-        // Parse the : in 
+        // Parse the : in
         // MyStruct {
         //   my_field: type,
         // }

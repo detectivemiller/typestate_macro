@@ -1,8 +1,8 @@
 pub mod type_state;
 #[macro_use]
 pub mod space;
-pub mod state_field;
 pub mod state;
+pub mod state_field;
 mod transition;
 
 use proc_macro2::TokenStream;
